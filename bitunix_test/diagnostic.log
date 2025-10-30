@@ -1,0 +1,89 @@
+2025-10-29 15:57:58,399 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 15:57:58,399 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 15:59:52,975 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 15:59:52,975 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:00:51,631 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:00:51,631 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:01:40,675 - INFO - 127.0.0.1 - - [29/Oct/2025 16:01:40] "GET / HTTP/1.1" 200 -
+2025-10-29 16:01:40,703 - INFO - 127.0.0.1 - - [29/Oct/2025 16:01:40] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:01:40,704 - INFO - 127.0.0.1 - - [29/Oct/2025 16:01:40] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-10-29 16:05:36,113 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:05:36,113 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:05:38,038 - INFO - 127.0.0.1 - - [29/Oct/2025 16:05:38] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:06:10,459 - INFO - 127.0.0.1 - - [29/Oct/2025 16:06:10] "GET / HTTP/1.1" 200 -
+2025-10-29 16:06:10,488 - INFO - 127.0.0.1 - - [29/Oct/2025 16:06:10] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:08:42,704 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:08:42,704 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:08:44,507 - INFO - 127.0.0.1 - - [29/Oct/2025 16:08:44] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:08:44,508 - INFO - 127.0.0.1 - - [29/Oct/2025 16:08:44] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:08:59,643 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:08:59,643 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:09:00,806 - INFO - 127.0.0.1 - - [29/Oct/2025 16:09:00] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:09:00,807 - INFO - 127.0.0.1 - - [29/Oct/2025 16:09:00] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:09:37,247 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:09:37,247 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:09:39,484 - INFO - 127.0.0.1 - - [29/Oct/2025 16:09:39] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:09:39,486 - INFO - 127.0.0.1 - - [29/Oct/2025 16:09:39] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:20:48,982 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:20:48,982 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:20:49,577 - INFO - 127.0.0.1 - - [29/Oct/2025 16:20:49] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:20:49,579 - INFO - 127.0.0.1 - - [29/Oct/2025 16:20:49] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:21:17,911 - INFO - 127.0.0.1 - - [29/Oct/2025 16:21:17] "GET / HTTP/1.1" 200 -
+2025-10-29 16:21:17,933 - INFO - 127.0.0.1 - - [29/Oct/2025 16:21:17] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:21:17,935 - INFO - 127.0.0.1 - - [29/Oct/2025 16:21:17] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-10-29 16:22:55,450 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:22:55,450 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:22:56,993 - INFO - 127.0.0.1 - - [29/Oct/2025 16:22:56] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:22:56,996 - INFO - 127.0.0.1 - - [29/Oct/2025 16:22:56] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:22:56,997 - INFO - 127.0.0.1 - - [29/Oct/2025 16:22:56] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:23:07,236 - INFO - 127.0.0.1 - - [29/Oct/2025 16:23:07] "GET / HTTP/1.1" 200 -
+2025-10-29 16:23:07,263 - INFO - 127.0.0.1 - - [29/Oct/2025 16:23:07] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:27:16,326 - INFO - 127.0.0.1 - - [29/Oct/2025 16:27:16] "GET / HTTP/1.1" 200 -
+2025-10-29 16:27:16,335 - INFO - 127.0.0.1 - - [29/Oct/2025 16:27:16] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:27:16,940 - INFO - 127.0.0.1 - - [29/Oct/2025 16:27:16] "GET / HTTP/1.1" 200 -
+2025-10-29 16:27:16,952 - INFO - 127.0.0.1 - - [29/Oct/2025 16:27:16] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:27:18,539 - INFO - 127.0.0.1 - - [29/Oct/2025 16:27:18] "GET / HTTP/1.1" 200 -
+2025-10-29 16:27:18,552 - INFO - 127.0.0.1 - - [29/Oct/2025 16:27:18] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:36:00,311 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:36:00,311 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:36:02,284 - INFO - 127.0.0.1 - - [29/Oct/2025 16:36:02] "GET / HTTP/1.1" 200 -
+2025-10-29 16:36:02,319 - INFO - 127.0.0.1 - - [29/Oct/2025 16:36:02] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:36:02,379 - INFO - 127.0.0.1 - - [29/Oct/2025 16:36:02] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-10-29 16:37:35,644 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.132:5000
+2025-10-29 16:37:35,644 - INFO - [33mPress CTRL+C to quit[0m
+2025-10-29 16:37:37,627 - INFO - 127.0.0.1 - - [29/Oct/2025 16:37:37] "GET / HTTP/1.1" 200 -
+2025-10-29 16:37:37,646 - INFO - 127.0.0.1 - - [29/Oct/2025 16:37:37] "GET /events HTTP/1.1" 200 -
+2025-10-29 16:37:37,647 - INFO - 127.0.0.1 - - [29/Oct/2025 16:37:37] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -

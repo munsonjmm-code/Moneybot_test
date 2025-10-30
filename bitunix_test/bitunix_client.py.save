@@ -1,0 +1,306 @@
+≈#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Bitunix simple client (clean build)
+- Uses KV-concat signing (key+value, ASCII-sorted keys, no '='/'&')
+- Works with endpoints you already validated:
+    * GET  /api/v1/futures/market/funding_rate
+    * GET  /api/v1/futures/account
+    * POST /api/v1/futures/account/change_position_mode
+    * POST /api/v1/futures/account/change_margin_mode
+    * POST /api/v1/futures/account/change_leverage
+- Provides a resilient order placer that tries multiple endpoint/body variants.
+
+ENV:
+  export BITUNIX_API_KEY="...32 chars..."
+  export BITUNIX_SECRET_KEY="...32 chars..."
+
+USAGE EXAMPLES:
+  python3 bitunix_client.py funding-rate --symbol DOGEUSDT
+  python3 bitunix_client.py account
+  python3 bitunix_client.py position-mode --mode HEDGE
+  python3 bitunix_client.py margin-mode --symbol DOGEUSDT --mode ISOLATION
+  python3 bitunix_client.py leverage --symbol DOGEUSDT --value 10
+
+  # Market buy 1 contract (or 1 unit for linear swap—depends on instrument spec)
+  python3 bitunix_client.py place --symbol DOGEUSDT --side BUY --type market --size 1
+
+  # Limit buy with price
+  python3 bitunix_client.py place --symbol DOGEUSDT --side BUY --type limit --size 1 --price 0.05
+"""
+
+import os
+import time
+import json
+import hashlib
+import secrets
+import argparse
+from typing import Dict, Tuple, Any, Optional, List
+
+import requests
+
+BASE = "https://fapi.bitunix.com"
+
+# ------------- Signing helpers (KV-concat) ------------- #
+def sha256_hex(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+def kv_concat(params: Dict[str, Any]) -> str:
+    # Bitunix expects params concatenated as key+value (ASCII key sort), no '=' or '&'
+    # Values must be plain (e.g., "USDT", "DOGEUSDT", "HEDGE")
+    items = sorted((k, str(v)) for k, v in params.items())
+    return "".join(f"{k}{v}" for k, v in items)
+
+def make_auth(api_key: str, secret: str, params: Dict[str, Any], body: Optional[dict]) -> Tuple[Dict[str, str], str, str]:
+    qp_str = kv_concat(params) if params else ""
+    body_str = "" if body is None else json.dumps(body, separators=(",", ":"))
+    nonce = secrets.token_hex(16)
+    ts = str(int(time.time() * 1000))
+    digest = sha256_hex(f"{nonce}{ts}{api_key}{qp_str}{body_str}")
+    sign = sha256_hex(f"{digest}{secret}")
+    headers = {
+        "api-key": api_key,
+        "sign": sign,
+        "nonce": nonce,
+        "timestamp": ts,
+        "Content-Type": "application/json",
+        "language": "en-US",
+    }
+    return headers, qp_str, sign
+
+# ------------- Low-level HTTP ------------- #
+def _print_http(prefix: str, url: str, ms: float, status: int, text: str, qp_str: str = "", body: Optional[dict] = None, sign: str = ""):
+    if prefix.startswith("[GET"):
+        print(f"{prefix} {url} ({ms:.2f} ms)")
+        print(f"STATUS: {status}")
+        if qp_str:
+            print(f"PARAMS: {json.dumps(_last_params, separators=(',', ':'))}")
+        print(f"RESP  : {text}")
+        return
+
+    print(f"{prefix} {url} ({ms:.2f} ms)")
+    if qp_str != "":
+        print(f"qp_str: {qp_str}")
+    if body is not None:
+        print(f"body  : {json.dumps(body, separators=(',', ':'))}")
+    if sign:
+        print(f"sign  : {sign}")
+    print(f"STATUS: {status}")
+    print(f"RESP  : {text}")
+
+_last_params: Dict[str, Any] = {}
+
+def do_get_public(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{BASE}{path}"
+    t0 = time.time()
+    resp = requests.get(url, params=params, timeout=20)
+    ms = (time.time() - t0) * 1000
+    _print_http("[GET🌐]", url, ms, resp.status_code, resp.text)
+    try:
+        return resp.json()
+    except Exception:
+        return {"code": -1, "msg": "bad json", "raw": resp.text}
+
+def do_get_private(path: str, api_key: str, secret: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    global _last_params
+    _last_params = params
+    url = f"{BASE}{path}"
+    headers, qp_str, sign = make_auth(api_key, secret, params, None)
+    t0 = time.time()
+    resp = requests.get(url, params=params, headers=headers, timeout=20)
+    ms = (time.time() - t0) * 1000
+    print(f"[GET🔐] {url} ({ms:.2f} ms)")
+    print(f"qp_str: {qp_str}")
+    print(f"sign  : {sign}")
+    print(f"STATUS: {resp.status_code}")
+    print(f"PARAMS: {json.dumps(params)}")
+    print(f"RESP  : {resp.text}")
+    try:
+        return resp.json()
+    except Exception:
+        return {"code": -1, "msg": "bad json", "raw": resp.text}
+
+def do_post_private(path: str, api_key: str, secret: str, params: Dict[str, Any], body: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"{BASE}{path}"
+    headers, qp_str, sign = make_auth(api_key, secret, params, body)
+    t0 = time.time()
+    resp = requests.post(url, params=params, headers=headers, data=json.dumps(body), timeout=20)
+    ms = (time.time() - t0) * 1000
+    _print_http("[POST🔐]", url, ms, resp.status_code, resp.text, qp_str, body, sign)
+    try:
+        return resp.json()
+    except Exception:
+        return {"code": -1, "msg": "bad json", "raw": resp.text}
+
+# ------------- High-level wrappers ------------- #
+def funding_rate(symbol: str) -> Dict[str, Any]:
+    return do_get_public("/api/v1/futures/market/funding_rate", {"symbol": symbol})
+
+def get_account(api_key: str, secret: str, margin_coin: str = "USDT") -> Dict[str, Any]:
+    return do_get_private("/api/v1/futures/account", api_key, secret, {"marginCoin": margin_coin})
+
+def set_position_mode(api_key: str, secret: str, mode: str) -> Dict[str, Any]:
+    body = {"positionMode": mode}
+    return do_post_private("/api/v1/futures/account/change_position_mode", api_key, secret, {}, body)
+
+def set_margin_mode(api_key: str, secret: str, symbol: str, margin_mode: str, margin_coin: str = "USDT") -> Dict[str, Any]:
+    params = {"symbol": symbol, "marginMode": margin_mode, "marginCoin": margin_coin}
+    body = {"symbol": symbol, "marginMode": margin_mode, "marginCoin": margin_coin}
+    return do_post_private("/api/v1/futures/account/change_margin_mode", api_key, secret, params, body)
+
+def set_leverage(api_key: str, secret: str, symbol: str, leverage: int, margin_coin: str = "USDT") -> Dict[str, Any]:
+    params = {"symbol": symbol, "marginCoin": margin_coin}
+    body = {"symbol": symbol, "leverage": leverage, "marginCoin": margin_coin}
+    return do_post_private("/api/v1/futures/account/change_leverage", api_key, secret, params, body)
+
+# ------------- Order placement (robust multi-variant) ------------- #
+def place_order(api_key: str,
+                secret: str,
+                symbol: str,
+                side: str,              # BUY or SELL
+                order_type: str,        # market or limit
+                size: float,
+                price: Optional[float],
+                margin_coin: str = "USDT") -> Dict[str, Any]:
+    """
+    Tries multiple endpoint/body variants. Stops on first success (code == 0).
+    """
+    side = side.upper()
+    order_type = order_type.lower()
+
+    # Derived fields many exchanges require
+    hold_side = "long" if side == "BUY" else "short"
+    client_oid = secrets.token_hex(12)
+
+    params = {"symbol": symbol, "marginCoin": margin_coin}
+
+    # Build body variants (both `type` and `orderType`, with/without holdSide/clientOid)
+    base_body = {
+        "symbol": symbol,
+        "size": float(size),
+        "marginCoin": margin_coin,
+    }
+    if order_type == "market":
+        price_field = {}
+    else:
+        if price is None:
+            return {"code": -2, "msg": "limit order requires --price"}
+        price_field = {"price": float(price)}
+
+    variants: List[Tuple[str, Dict[str, Any]]] = []
+
+    # Paths to try (known ones you tested)
+    paths = [
+        "/api/v1/futures/trade/order",
+        "/api/futures/v1/trade/order",
+        "/api/v1/futures/place_order",
+    ]
+
+    # Bodies to try
+    shapes = [
+        {"side": side, "type": order_type, **price_field},
+        {"side": side, "orderType": order_type, **price_field},
+        {"side": side, "type": order_type, "holdSide": hold_side, **price_field},
+        {"side": side, "orderType": order_type, "holdSide": hold_side, **price_field},
+        {"side": side, "type": order_type, "clientOid": client_oid, **price_field},
+        {"side": side, "orderType": order_type, "clientOid": client_oid, **price_field},
+        {"side": side, "type": order_type, "holdSide": hold_side, "clientOid": client_oid, **price_field},
+        {"side": side, "orderType": order_type, "holdSide": hold_side, "clientOid": client_oid, **price_field},
+    ]
+
+    for path in paths:
+        for shape in shapes:
+            body = dict(base_body)
+            body.update(shape)
+            res = do_post_private(path, api_key, secret, params, body)
+            code = res.get("code")
+            if code == 0:
+                return res
+            # If server says clearly "bad param" you could prune shapes here.
+            # For now, keep trying all; code 2 = "System error" seen in your logs.
+
+    return {"code": 999, "msg": "All endpoint/body variants returned non-zero code. See logs above for details."}
+
+# ------------- CLI ------------- #
+def main():
+    parser = argparse.ArgumentParser(description="Bitunix simple client")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    # funding-rate
+    p_fr = sub.add_parser("funding-rate", help="Get current funding rate for a symbol")
+    p_fr.add_argument("--symbol", required=True, help="e.g. DOGEUSDT")
+
+    # account
+    p_acc = sub.add_parser("account", help="Show futures account (balance, mode, etc.)")
+    p_acc.add_argument("--margin-coin", default="USDT", help="Margin coin (default: USDT)")
+
+    # position-mode
+    p_pm = sub.add_parser("position-mode", help="Set position mode (e.g., HEDGE or ONEWAY)")
+    p_pm.add_argument("--mode", required=True, help="HEDGE or ONEWAY")
+
+    # margin-mode
+    p_mm = sub.add_parser("margin-mode", help="Set margin mode for a symbol")
+    p_mm.add_argument("--symbol", required=True, help="Symbol, e.g. DOGEUSDT")
+    p_mm.add_argument("--mode", required=True, help="ISOLATION or CROSS")
+    p_mm.add_argument("--margin-coin", default="USDT", help="Margin coin (default: USDT)")
+
+    # leverage
+    p_lev = sub.add_parser("leverage", help="Set leverage for a symbol")
+    p_lev.add_argument("--symbol", required=True, help="Symbol, e.g. DOGEUSDT")
+    p_lev.add_argument("--value", type=int, required=True, help="Leverage integer, e.g. 10")
+    p_lev.add_argument("--margin-coin", default="USDT", help="Margin coin (default: USDT)")
+
+    # place
+    p_place = sub.add_parser("place", help="Place order (tries several endpoint/body variants)")
+    p_place.add_argument("--symbol", required=True, help="Symbol, e.g. DOGEUSDT")
+    p_place.add_argument("--side", required=True, choices=["BUY", "SELL"], help="BUY or SELL")
+    p_place.add_argument("--type", required=True, choices=["market", "limit"], help="Order type")
+    p_place.add_argument("--size", type=float, required=True, help="Order size (instrument unit)")
+    p_place.add_argument("--price", type=float, help="Required for limit orders")
+    p_place.add_argument("--margin-coin", default="USDT", help="Margin coin (default: USDT)")
+
+    args = parser.parse_args()
+
+    api_key = os.getenv("BITUNIX_API_KEY", "").strip()
+    secret = os.getenv("BITUNIX_SECRET_KEY", "").strip()
+    if not api_key or not secret:
+        print("❌ Missing keys. Run in this terminal:")
+        print('export BITUNIX_API_KEY="your_api_key"')
+        print('export BITUNIX_SECRET_KEY="your_secret_key"')
+        return
+
+    if args.cmd == "funding-rate":
+        funding_rate(args.symbol)
+
+    elif args.cmd == "account":
+        get_account(api_key, secret, args.margin_coin)
+
+    elif args.cmd == "position-mode":
+        set_position_mode(api_key, secret, args.mode)
+
+    elif args.cmd == "margin-mode":
+        set_margin_mode(api_key, secret, args.symbol, args.mode, args.margin_coin)
+
+    elif args.cmd == "leverage":
+        set_leverage(api_key, secret, args.symbol, args.value, args.margin_coin)
+
+    elif args.cmd == "place":
+        res = place_order(
+            api_key=api_key,
+            secret=secret,
+            symbol=args.symbol,
+            side=args.side,
+            order_type=args.type,
+            size=args.size,
+            price=args.price,
+            margin_coin=args.margin_coin,
+        )
+        code = res.get("code")
+        if code == 0:
+            print("✅ order placed:", json.dumps(res, indent=2))
+        else:
+            print("❌ place: non-zero result ->", json.dumps(res, indent=2))
+
+if __name__ == "__main__":
+    main()

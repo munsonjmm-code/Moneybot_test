@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bitunix Bot UI</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: monospace; background:#111; color:#eee; margin:20px; }
+        input, select { width:120px; margin:4px; }
+        button { margin:4px; cursor:pointer; }
+        #output { white-space: pre-wrap; background:#000; padding:10px; border:1px solid #444; height:300px; overflow:auto; }
+    </style>
+</head>
+<body>
+    <h2>Bitunix Bot — Limit Order Console</h2>
+    <div>
+        Symbol: <input id="symbol" value="DOGEUSDT">
+        Side: <select id="side"><option>BUY</option><option>SELL</option></select>
+        Price: <input id="price" value="0.19004">
+        Percent: <input id="percent" value="10">
+        Timeout(s): <input id="timeout" value="15">
+        <button onclick="placeOrder()">Place Order</button>
+    </div>
+    <div style="margin-top:10px;">
+        Order ID: <input id="orderId" placeholder="1983571932792819712" style="width:240px">
+        <button onclick="checkOrder()">Check Status</button>
+        <button onclick="cancelOrder()">Cancel Order</button>
+    </div>
+    <h3>Console Output:</h3>
+    <div id="output">Ready...</div>
+
+    <script>
+    async function placeOrder() {
+        const body = {
+            symbol: symbol.value,
+            side: side.value,
+            price: parseFloat(price.value),
+            percent: parseFloat(percent.value),
+            timeout: parseInt(timeout.value)
+        };
+        output.innerText = "Placing order...";
+        const res = await fetch("/place_order", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        output.innerText = data.output;
+    }
+
+    async function checkOrder() {
+        const body = { symbol: symbol.value, orderId: orderId.value };
+        output.innerText = "Checking order...";
+        const res = await fetch("/check_order", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        output.innerText = data.output;
+    }
+
+    async function cancelOrder() {
+        const body = { symbol: symbol.value, orderId: orderId.value };
+        output.innerText = "Cancelling order...";
+        const res = await fetch("/cancel_order", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        output.innerText = data.output;
+    }
+
+    const eventSource = new EventSource('/events');
+    eventSource.onmessage = function(event) {
+        output.innerText += "\n" + event.data;
+        output.scrollTop = output.scrollHeight;
+    };
+    </script>
+</body>
+</html>

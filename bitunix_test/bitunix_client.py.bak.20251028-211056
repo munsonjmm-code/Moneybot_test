@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Bitunix simple client (clean build)
+- Auth/signing matches the working pattern we confirmed in your tests.
+- Endpoints fixed to /api/v1/futures/...
+- CLI:
+    account                         Show futures account (USDT)
+    tickers --symbol DOGEUSDT       Public tickers
+    place --symbol ... --side ...   Place order (limit/market)
+    place-percent ...               Size by percent of balance (anchored to price)
+"""
+
+import os, time, json, hashlib, secrets, argparse, sys
+from typing import Dict, Tuple, Optional
+
+try:
+    import requests
+except Exception as e:
+    print("This script needs the 'requests' package. Install with:\n  python3 -m pip install requests")
+    sys.exit(1)
+
+BASE = "https://fapi.bitunix.com"
+
+# ---------- helpers ----------
+
+def sha256_hex(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+def now_ms() -> str:
+    return str(int(time.time() * 1000))
+
+def make_nonce() -> str:
+    return secrets.token_hex(16)  # 32 hex chars
+
+def kv_concat(params: Dict[str, str]) -> str:
+    """ASCII sort by key, then concatenate key+value (NO '=' / '&')."""
+    return "".join(f"{k}{str(v)}" for k, v in sorted((k, str(v)) for k, v in params.items()))
+
+def make_signature(api_key: str,
+                   secret_key: str,
+                   params: Dict[str, str],
+                   body: Optional[Dict]) -> Tuple[str, str, str, str]:
+    """
+    Bitunix signature you validated:
+      digest = SHA256(nonce + timestamp + api_key + kv_concat(params) + body_str)
+      sign   = SHA256(digest + secret_key)
+    body_str is '' for GET or if body is None; otherwise compact JSON.
+    Returns: (sign, nonce, ts, kv_string)
+    """
+    qp_str   = kv_concat(params)
+    body_str = "" if body is None else json.dumps(body, separators=(",", ":"))
+    nonce    = make_nonce()
+    ts       = now_ms()
+    digest   = sha256_hex(f"{nonce}{ts}{api_key}{qp_str}{body_str}")
+    sign     = sha256_hex(f"{digest}{secret_key}")
+    return sign, nonce, ts, qp_str
+
+def private_headers(api_key: str, sign: str, nonce: str, ts: str) -> Dict[str, str]:
+    return {
+        "api-key": api_key,
+        "sign": sign,
+        "nonce": nonce,
+        "timestamp": ts,
+        "Content-Type": "application/json",
+        "language": "en-US",
+    }
+
+def require_keys() -> Tuple[str, str]:
+    api_key = os.getenv("BITUNIX_API_KEY", "").strip()
+    secret  = os.getenv("BITUNIX_SECRET_KEY", "").strip()
+    if not api_key or not secret:
+        print("Missing API keys.\nExport them in your shell, then re-run:")
+        print('  export BITUNIX_API_KEY="your_api_key_here"')
+        print('  export BITUNIX_SECRET_KEY="your_secret_here"')
+        sys.exit(1)
+    return api_key, secret
+
+# ---------- HTTP wrappers ----------
+
+def do_get_private(path: str, params: Dict[str, str], debug: bool=False):
+    api_key, secret = require_keys()
+    sign, nonce, ts, qp_str = make_signature(api_key, secret, params, None)
+    headers = private_headers(api_key, sign, nonce, ts)
+    url = f"{BASE}{path}"
+    if debug:
+        print(f"[GET🔐] {url}")
+        print(f"qp_str: {qp_str}")
+        print(f"sign  : {sign}")
+    resp = requests.get(url, params=params, headers=headers, timeout=20)
+    if debug:
+        print(f"STATUS: {resp.status_code}")
+        print(f"PARAMS: {json.dumps(params)}")
+        print(f"RESP  : {resp.text}")
+    else:
+        print(resp.text)
+    return resp
+
+def do_post_private(path: str, params: Dict[str, str], body: Dict, debug: bool=False):
+    api_key, secret = require_keys()
+    sign, nonce, ts, qp_str = make_signature(api_key, secret, params, body)
+    headers = private_headers(api_key, sign, nonce, ts)
+    url = f"{BASE}{path}"
+    data = json.dumps(body, separators=(",", ":"))
+    if debug:
+        print(f"[POST🔐] {url}")
+        print(f"qp_str: {qp_str}")
+        print(f"body  : {data}")
+        print(f"sign  : {sign}")
+    resp = requests.post(url, params=params, headers=headers, data=data, timeout=20)
+    if debug:
+        print(f"STATUS: {resp.status_code}")
+        print(f"RESP  : {resp.text}")
+    else:
+        print(resp.text)
+    return resp
+
+def do_get_public(path: str, params: Dict[str, str], debug: bool=False):
+    url = f"{BASE}{path}"
+    t0 = time.perf_counter()
+    resp = requests.get(url, params=params, timeout=20)
+    ms = (time.perf_counter() - t0) * 1000.0
+    if debug:
+        print(f"[GET🌐] {url} ({ms:.2f} ms)")
+        print(f"STATUS: {resp.status_code}")
+        print(f"RESP  : {resp.text}")
+    else:
+        print(resp.text)
+    return resp
+
+# ---------- Commands ----------
+
+def cmd_account(args):
+    params = {"marginCoin": args.margin_coin}
+    do_get_private("/api/v1/futures/account", params, debug=args.debug)
+
+def cmd_tickers(args):
+    # Correct public path: /api/v1/futures/market/tickers
+    params = {}
+    if args.symbol:
+        params["symbol"] = args.symbol
+    do_get_public("/api/v1/futures/market/tickers", params, debug=args.debug)
+
+def normalize_side(side: str) -> str:
+    s = side.strip().upper()
+    if s in ("BUY", "OPEN_LONG", "LONG"):
+        return "open_long"
+    if s in ("SELL", "OPEN_SHORT", "SHORT"):
+        return "open_short"
+    # Leave passthrough if user supplies close_long/close_short etc.
+    return side
+
+def cmd_place(args):
+    """
+    Private place order via: /api/v1/futures/trade/order
+    Body fields seen on Bitunix:
+      symbol, marginCoin, side(open_long/open_short/close_long/close_short), orderType(limit/market), price (if limit), size, clientOid
+    """
+    side = normalize_side(args.side)
+    params = {"marginCoin": args.margin_coin, "symbol": args.symbol}
+    body: Dict[str, object] = {
+        "symbol": args.symbol,
+        "marginCoin": args.margin_coin,
+        "side": side,
+        "orderType": args.type,
+        "size": float(args.size),
+        "clientOid": secrets.token_hex(10),
+    }
+    if args.type == "limit":
+        if args.price is None:
+            print("For limit orders, --price is required.")
+            sys.exit(1)
+        body["price"] = float(args.price)
+
+    do_post_private("/api/v1/futures/trade/order", params, body, debug=args.debug)
+
+def cmd_place_percent(args):
+    """
+    Size by percent of available balance. We require an anchor price (approx)
+    because the exchange expects raw size (contracts/units).
+    """
+    # 1) Get balance
+    acc = requests.Response()
+    try:
+        api_key, secret = require_keys()
+        # mimic do_get_private with capture
+        params_acc = {"marginCoin": args.margin_coin}
+        sign, nonce, ts, qp_str = make_signature(api_key, secret, params_acc, None)
+        headers = private_headers(api_key, sign, nonce, ts)
+        url = f"{BASE}/api/v1/futures/account"
+        acc = requests.get(url, params=params_acc, headers=headers, timeout=20)
+        data = acc.json()
+        avail = float(data["data"]["transfer"])
+    except Exception as e:
+        print("Could not fetch account balance:", getattr(acc, "text", ""), e)
+        sys.exit(1)
+
+    # 2) Compute notional and size (very simple model)
+    pct = float(args.percent) / 100.0
+    notional = avail * pct
+    if not args.anchor_price:
+        print("place-percent needs --anchor-price (approx current price) to convert notional to size.")
+        sys.exit(1)
+    anchor = float(args.anchor_price)
+    raw_size = round(notional / anchor, 6)
+    print(f"→ allocating about {args.percent}% of {avail:.4f} ≈ notional {notional:.4f} at price ~{anchor} ⇒ size {raw_size}")
+
+    # 3) Place
+    class _Obj: pass
+    o = _Obj()
+    o.symbol = args.symbol
+    o.side = args.side
+    o.type = args.type
+    o.price = args.price
+    o.size = raw_size
+    o.margin_coin = args.margin_coin
+    o.debug = args.debug
+
+    # Reuse cmd_place logic via an argparse-like facade
+    cmd_place(argparse.Namespace(
+        symbol=o.symbol, side=o.side, type=o.type, price=o.price,
+        size=o.size, margin_coin=o.margin_coin, debug=o.debug
+    ))
+
+# ---------- CLI ----------
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="bitunix_client.py", description="Bitunix simple client")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    p_acc = sub.add_parser("account", help="Show futures account")
+    p_acc.add_argument("--margin-coin", default="USDT")
+    p_acc.add_argument("--debug", action="store_true")
+    p_acc.set_defaults(func=cmd_account)
+
+    p_tick = sub.add_parser("tickers", help="Public: market tickers (/api/v1/futures/market/tickers)")
+    p_tick.add_argument("--symbol", default=None, help="Optional symbol, e.g., DOGEUSDT")
+    p_tick.add_argument("--debug", action="store_true")
+    p_tick.set_defaults(func=cmd_tickers)
+
+    p_place = sub.add_parser("place", help="Place order (/api/v1/futures/trade/order)")
+    p_place.add_argument("--symbol", required=True)
+    p_place.add_argument("--side", required=True, choices=["BUY", "SELL", "open_long", "open_short", "close_long", "close_short"])
+    p_place.add_argument("--type", default="limit", choices=["limit", "market"])
+    p_place.add_argument("--price", type=float, default=None, help="Required if type=limit")
+    p_place.add_argument("--size", type=float, required=True, help="Raw size/qty (units)")
+    p_place.add_argument("--margin-coin", default="USDT")
+    p_place.add_argument("--debug", action="store_true")
+    p_place.set_defaults(func=cmd_place)
+
+    p_pct = sub.add_parser("place-percent", help="Place order sized by percent of balance")
+    p_pct.add_argument("--symbol", required=True)
+    p_pct.add_argument("--side", required=True, choices=["BUY", "SELL", "open_long", "open_short"])
+    p_pct.add_argument("--type", default="limit", choices=["limit", "market"])
+    p_pct.add_argument("--price", type=float, default=None, help="Required if type=limit")
+    p_pct.add_argument("--percent", type=float, required=True, help="For example 10 means ten percent of balance")
+    p_pct.add_argument("--anchor-price", type=float, required=True, help="Approx current price to convert notional to size")
+    p_pct.add_argument("--margin-coin", default="USDT")
+    p_pct.add_argument("--debug", action="store_true")
+    p_pct.set_defaults(func=cmd_place_percent)
+
+    return p
+
+def main():
+    p = build_parser()
+    args = p.parse_args()
+    args.func(args)
+
+if __name__ == "__main__":
+    main()
